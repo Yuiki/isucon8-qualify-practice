@@ -183,7 +183,7 @@ async function getEventByData(eventRow: any, loginUserId?: number): Promise<Even
   const [sheetRows] = await fastify.mysql.query("SELECT * FROM sheets ORDER BY `rank`, num");
 
   const [reservations] = await fastify.mysql.query("SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL", [event.id]);
-  const reservationMap = new Map(reservations.map((row) => [row.sheet_id, row]));
+  const reservationMap = new Map(reservations.map((row) => [row.sheet_id, row] as [any, any]));
 
   for (const sheetRow of sheetRows) {
     const sheet = { ...sheetRow };
