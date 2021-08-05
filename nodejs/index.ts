@@ -134,10 +134,10 @@ async function getEvents(where: (event: Event) => boolean = (eventRow) => !!even
   try {
     const [rows] = await conn.query("SELECT * FROM events ORDER BY id ASC");
 
-    const eventIds = rows.filter((row) => where(row)).map((row) => row.id);
+    const eventRows = rows.filter((row) => where(row));
 
-    for (const eventId of eventIds) {
-      const event = (await getEvent(eventId))!;
+    for (const eventRow of eventRows) {
+      const event = (await getEventByData(eventRow))!;
 
       for (const rank of Object.keys(event.sheets)) {
         delete event.sheets[rank].detail;
@@ -158,6 +158,10 @@ async function getEvents(where: (event: Event) => boolean = (eventRow) => !!even
 
 async function getEvent(eventId: number, loginUserId?: number): Promise<Event | null> {
   const [[eventRow]] = await fastify.mysql.query("SELECT * FROM events WHERE id = ?", [eventId]);
+  return getEventByData(eventRow, loginUserId);
+}
+
+async function getEventByData(eventRow: any, loginUserId?: number): Promise<Event | null> {
   if (!eventRow) {
     return null;
   }
