@@ -194,7 +194,7 @@ async function getEventByData(eventRow: any, loginUserId?: number): Promise<Even
     event.total++;
     event.sheets[sheet.rank].total++;
 
-    const reservation = reservationMap[sheet.id];
+    const reservation = reservationMap.get(sheet.id);
     if (reservation) {
       if (loginUserId && reservation.user_id === loginUserId) {
         sheet.mine = true;
