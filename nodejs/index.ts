@@ -226,11 +226,11 @@ function sanitizeEvent(event: Event) {
 async function validateRank(rank: string): Promise<boolean> {
   const [[row]] = await fastify.mysql.query("SELECT COUNT(*) FROM sheets WHERE `rank` = ?", [rank]);
   const [count] = Object.values(row);
-  return count > 0;
+  return (count as number) > 0;
 }
 
 function parseTimestampToEpoch(timestamp: string) {
-  return Math.floor(new Date(timestamp+"Z").getTime() / 1000);
+  return Math.floor(new Date(timestamp + "Z").getTime() / 1000);
 }
 
 fastify.get("/", { beforeHandler: fillinUser }, async (request, reply) => {
@@ -327,7 +327,7 @@ fastify.get("/api/users/:id", { beforeHandler: loginRequired }, async (request, 
 
   const [[totalPriceRow]] = await fastify.mysql.query("SELECT IFNULL(SUM(e.price + s.price), 0) FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.canceled_at IS NULL", user.id);
   const [totalPriceStr] = Object.values(totalPriceRow);
-  user.total_price = Number.parseInt(totalPriceStr, 10);
+  user.total_price = Number.parseInt(totalPriceStr as string, 10);
 
   const recentEvents: Array<any> = [];
   {
@@ -399,7 +399,7 @@ fastify.post("/api/events/:id/actions/reserve", { beforeHandler: loginRequired }
     return resError(reply, "invalid_event", 404);
   }
 
-  if (!await validateRank(rank)) {
+  if (!(await validateRank(rank))) {
     return resError(reply, "invalid_rank", 400);
   }
 
@@ -445,7 +445,7 @@ fastify.delete("/api/events/:id/sheets/:rank/:num/reservation", { beforeHandler:
   if (!(event && event.public)) {
     return resError(reply, "invalid_event", 404);
   }
-  if (!await validateRank(rank)) {
+  if (!(await validateRank(rank))) {
     return resError(reply, "invalid_rank", 404);
   }
 
@@ -696,10 +696,7 @@ async function renderReportCsv<T>(reply: FastifyReply<T>, reports: ReadonlyArray
 }
 
 function resError(reply, error: string = "unknown", status: number = 500) {
-  reply
-    .type("application/json")
-    .code(status)
-    .send({ error });
+  reply.type("application/json").code(status).send({ error });
 }
 
 fastify.listen(8080, (err, address) => {
