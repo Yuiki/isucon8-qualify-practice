@@ -10,6 +10,7 @@ import path from "path";
 import child_process from "child_process";
 import util from "util";
 import { IncomingMessage } from "http";
+import AsyncLock from "async-lock";
 
 const execFile = util.promisify(child_process.execFile);
 
@@ -396,105 +397,111 @@ fastify.get("/api/events/:id", async (request, reply) => {
   reply.send(sanitizedEvent);
 });
 
+const lock = new AsyncLock();
+
 fastify.post("/api/events/:id/actions/reserve", { beforeHandler: loginRequired }, async (request, reply) => {
-  const eventId = request.params.id;
-  const rank = request.body.sheet_rank;
+  lock.acquire("post-reserve", async () => {
+    const eventId = request.params.id;
+    const rank = request.body.sheet_rank;
 
-  const user = (await getLoginUser(request))!;
-  const event = await getEvent(eventId, user.id);
-  if (!(event && event.public)) {
-    return resError(reply, "invalid_event", 404);
-  }
-
-  if (!(await validateRank(rank))) {
-    return resError(reply, "invalid_rank", 400);
-  }
-
-  let sheetRow: any;
-  let reservationId: any;
-  while (true) {
-    [[sheetRow]] = await fastify.mysql.query("SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1", [event.id, rank]);
-
-    if (!sheetRow) {
-      return resError(reply, "sold_out", 409);
+    const user = (await getLoginUser(request))!;
+    const event = await getEvent(eventId, user.id);
+    if (!(event && event.public)) {
+      return resError(reply, "invalid_event", 404);
     }
 
-    const conn = await getConnection();
-    await conn.beginTransaction();
-    try {
-      const [result] = await conn.query("INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?)", [event.id, sheetRow.id, user.id, new Date()]);
-      reservationId = result.insertId;
-      await conn.commit();
-    } catch (e) {
-      await conn.rollback();
-      console.warn("re-try: rollback by:", e);
-      continue; // retry
-    } finally {
-      conn.release();
+    if (!(await validateRank(rank))) {
+      return resError(reply, "invalid_rank", 400);
     }
-    break;
-  }
 
-  reply.code(202).send({
-    id: reservationId,
-    sheet_rank: rank,
-    sheet_num: sheetRow.num,
+    let sheetRow: any;
+    let reservationId: any;
+    while (true) {
+      [[sheetRow]] = await fastify.mysql.query("SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL) AND `rank` = ? ORDER BY RAND() LIMIT 1", [event.id, rank]);
+
+      if (!sheetRow) {
+        return resError(reply, "sold_out", 409);
+      }
+
+      const conn = await getConnection();
+      await conn.beginTransaction();
+      try {
+        const [result] = await conn.query("INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?)", [event.id, sheetRow.id, user.id, new Date()]);
+        reservationId = result.insertId;
+        await conn.commit();
+      } catch (e) {
+        await conn.rollback();
+        console.warn("re-try: rollback by:", e);
+        continue; // retry
+      } finally {
+        conn.release();
+      }
+      break;
+    }
+
+    reply.code(202).send({
+      id: reservationId,
+      sheet_rank: rank,
+      sheet_num: sheetRow.num,
+    });
   });
 });
 
 fastify.delete("/api/events/:id/sheets/:rank/:num/reservation", { beforeHandler: loginRequired }, async (request, reply) => {
-  const eventId = request.params.id;
-  const rank = request.params.rank;
-  const num = request.params.num;
+  lock.acquire("delete-reserve", async () => {
+    const eventId = request.params.id;
+    const rank = request.params.rank;
+    const num = request.params.num;
 
-  const user = (await getLoginUser(request))!;
-  const event = await getEvent(eventId, user.id);
-  if (!(event && event.public)) {
-    return resError(reply, "invalid_event", 404);
-  }
-  if (!(await validateRank(rank))) {
-    return resError(reply, "invalid_rank", 404);
-  }
-
-  const [[sheetRow]] = await fastify.mysql.query("SELECT * FROM sheets WHERE `rank` = ? AND num = ?", [rank, num]);
-  if (!sheetRow) {
-    return resError(reply, "invalid_sheet", 404);
-  }
-
-  const conn = await getConnection();
-  let done = false;
-  await conn.beginTransaction();
-  TRANSACTION: try {
-    const [[reservationRow]] = await conn.query("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id HAVING reserved_at = MIN(reserved_at) FOR UPDATE", [event.id, sheetRow.id]);
-    if (!reservationRow) {
-      resError(reply, "not_reserved", 400);
-      done = true;
-      await conn.rollback();
-      break TRANSACTION;
+    const user = (await getLoginUser(request))!;
+    const event = await getEvent(eventId, user.id);
+    if (!(event && event.public)) {
+      return resError(reply, "invalid_event", 404);
     }
-    if (reservationRow.user_id !== user.id) {
-      resError(reply, "not_permitted", 403);
-      done = true;
-      await conn.rollback();
-      break TRANSACTION;
+    if (!(await validateRank(rank))) {
+      return resError(reply, "invalid_rank", 404);
     }
 
-    await conn.query("UPDATE reservations SET canceled_at = ? WHERE id = ?", [new Date(), reservationRow.id]);
+    const [[sheetRow]] = await fastify.mysql.query("SELECT * FROM sheets WHERE `rank` = ? AND num = ?", [rank, num]);
+    if (!sheetRow) {
+      return resError(reply, "invalid_sheet", 404);
+    }
 
-    await conn.commit();
-  } catch (e) {
-    console.warn("rollback by:", e);
-    await conn.rollback();
-    resError(reply);
-    done = true;
-  }
+    const conn = await getConnection();
+    let done = false;
+    await conn.beginTransaction();
+    TRANSACTION: try {
+      const [[reservationRow]] = await conn.query("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id HAVING reserved_at = MIN(reserved_at)", [event.id, sheetRow.id]);
+      if (!reservationRow) {
+        resError(reply, "not_reserved", 400);
+        done = true;
+        await conn.rollback();
+        break TRANSACTION;
+      }
+      if (reservationRow.user_id !== user.id) {
+        resError(reply, "not_permitted", 403);
+        done = true;
+        await conn.rollback();
+        break TRANSACTION;
+      }
 
-  conn.release();
-  if (done) {
-    return;
-  }
+      await conn.query("UPDATE reservations SET canceled_at = ? WHERE id = ?", [new Date(), reservationRow.id]);
 
-  reply.code(204);
+      await conn.commit();
+    } catch (e) {
+      console.warn("rollback by:", e);
+      await conn.rollback();
+      resError(reply);
+      done = true;
+    }
+
+    conn.release();
+    if (done) {
+      return;
+    }
+
+    reply.code(204);
+  });
 });
 
 async function getLoginAdministrator<T>(request: FastifyRequest<T>): Promise<{ id; nickname } | null> {
