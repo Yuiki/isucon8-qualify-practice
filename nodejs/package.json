@@ -22,10 +22,12 @@
     "typescript": "*"
   },
   "devDependencies": {
+    "0x": "^4.10.2",
     "ts-node-dev": "^1.0.0-pre.30"
   },
   "scripts": {
     "build": "tsc --build tsconfig.json && cp -f ./build/index.js index.js",
-    "clean": "rm -rf ./build index.js"
+    "clean": "rm -rf ./build index.js",
+    "0x": "npm run build && 0x index.js"
   }
 }
