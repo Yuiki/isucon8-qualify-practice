@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS `users`;
 CREATE TABLE IF NOT EXISTS users (
     id          INTEGER UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     nickname    VARCHAR(128) NOT NULL,
@@ -6,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     UNIQUE KEY login_name_uniq (login_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+DROP TABLE IF EXISTS `events`;
 CREATE TABLE IF NOT EXISTS events (
     id          INTEGER UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     title       VARCHAR(128)     NOT NULL,
@@ -14,6 +16,7 @@ CREATE TABLE IF NOT EXISTS events (
     price       INTEGER UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+DROP TABLE IF EXISTS `sheets`;
 CREATE TABLE IF NOT EXISTS sheets (
     id          INTEGER UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     `rank`      VARCHAR(128)     NOT NULL,
@@ -22,6 +25,7 @@ CREATE TABLE IF NOT EXISTS sheets (
     UNIQUE KEY rank_num_uniq (`rank`, num)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+DROP TABLE IF EXISTS `reservations`;
 CREATE TABLE IF NOT EXISTS reservations (
     id          INTEGER UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     event_id    INTEGER UNSIGNED NOT NULL,
@@ -35,6 +39,7 @@ CREATE TABLE IF NOT EXISTS reservations (
     KEY reserved_at_idx (reserved_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+DROP TABLE IF EXISTS `administrators`;
 CREATE TABLE IF NOT EXISTS administrators (
     id          INTEGER UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     nickname    VARCHAR(128) NOT NULL,

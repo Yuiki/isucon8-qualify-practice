@@ -6,7 +6,6 @@ BENCH_DIR="$ROOT_DIR/bench"
 
 export MYSQL_PWD=isucon
 
-mysql -uisucon -e "DROP DATABASE IF EXISTS torb; CREATE DATABASE torb;"
 mysql -uisucon torb < "$DB_DIR/schema.sql"
 
 if [ ! -f "$DB_DIR/isucon8q-initial-dataset.sql.gz" ]; then
