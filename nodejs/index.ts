@@ -136,8 +136,9 @@ async function getEvents(where: (event: Event) => boolean = (eventRow) => !!even
 
     const eventRows = rows.filter((row) => where(row));
 
+    const [sheetRows] = await fastify.mysql.query("SELECT * FROM sheets ORDER BY `rank`, num");
     for (const eventRow of eventRows) {
-      const event = (await getEventByData(eventRow))!;
+      const event = (await getEventByData(eventRow, sheetRows))!;
 
       for (const rank of Object.keys(event.sheets)) {
         delete event.sheets[rank].detail;
@@ -158,10 +159,11 @@ async function getEvents(where: (event: Event) => boolean = (eventRow) => !!even
 
 async function getEvent(eventId: number, loginUserId?: number): Promise<Event | null> {
   const [[eventRow]] = await fastify.mysql.query("SELECT * FROM events WHERE id = ?", [eventId]);
-  return getEventByData(eventRow, loginUserId);
+  const [sheetRows] = await fastify.mysql.query("SELECT * FROM sheets ORDER BY `rank`, num");
+  return getEventByData(eventRow, sheetRows, loginUserId);
 }
 
-async function getEventByData(eventRow: any, loginUserId?: number): Promise<Event | null> {
+async function getEventByData(eventRow: any, sheetRows: any, loginUserId?: number): Promise<Event | null> {
   if (!eventRow) {
     return null;
   }
@@ -179,8 +181,6 @@ async function getEventByData(eventRow: any, loginUserId?: number): Promise<Even
     sheetsForRank.total = 0;
     sheetsForRank.remains = 0;
   }
-
-  const [sheetRows] = await fastify.mysql.query("SELECT * FROM sheets ORDER BY `rank`, num");
 
   const [reservations] = await fastify.mysql.query("SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL", [event.id]);
   const reservationMap = new Map(reservations.map((row) => [row.sheet_id, row] as [any, any]));
