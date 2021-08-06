@@ -706,7 +706,7 @@ function resError(reply, error: string = "unknown", status: number = 500) {
   reply.type("application/json").code(status).send({ error });
 }
 
-fastify.listen(8080, (err, address) => {
+fastify.listen(8080, process.env.BIND_HOST || "127.0.0.1", (err, address) => {
   if (err) {
     throw new TraceError("Failed to listening", err);
   }
