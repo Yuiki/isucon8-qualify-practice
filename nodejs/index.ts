@@ -56,7 +56,7 @@ interface LoginUser {
 const SECRET = "tagomoris";
 
 const fastify = createFastify({
-  logger: true,
+  logger: false,
 });
 
 fastify.register(fastifyStatic, {
